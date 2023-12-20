@@ -20,6 +20,42 @@ client.on('ready', () => {
 
 client.on('messageCreate', async message => {
     console.log("Message received: " + message.content); 
+
+    if (!message.guild) return;
+    if (message.content.startsWith('!play')) {
+        const args = message.content.split(' ');
+        if (args.length < 2) {
+            message.reply('Please provide a YouTube URL.');
+            return;
+        }
+        const songUrl = args[1];
+        if (!ytdl.validateURL(songUrl)) {
+            message.reply('Please provide a valid YouTube URL.');
+            return;
+        }
+
+        const channel = message.member.voice.channel;
+        if (!channel) {
+            message.reply('You need to be in a voice channel to play music!');
+            return;
+        }
+
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
+
+        const stream = ytdl(songUrl, { filter: 'audioonly' });
+        const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
+        const player = createAudioPlayer();
+
+        player.play(resource);
+        connection.subscribe(player);
+
+        player.on(AudioPlayerStatus.Idle, () => connection.destroy());
+    }
+    
     if (message.content === '!join') {
         let role = message.guild.roles.cache.find(r => r.name === "Member"); // Replace "Member" with your role's name
 
@@ -89,8 +125,6 @@ client.on('messageReactionRemove', async (reaction, user) => {
         }
     }
 });
-
-
 
 
 client.on('guildMemberAdd', member => {
