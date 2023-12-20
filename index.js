@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
+require('dotenv').config();
 
 const client = new Client({
     intents: [
@@ -99,4 +100,4 @@ client.on('guildMemberAdd', member => {
     channel.send(`Welcome to the server, ${member}!`);
 });
 
-client.login('MTE4NjgyNzIwMDM0ODAzMzA0NA.GmJ04n.K9DuyuDE595mIMqObN8AiGeb-eWH-zIYeSsQi0');
+client.login(process.env.TOKEN);
