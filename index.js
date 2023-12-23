@@ -1,9 +1,34 @@
+
+// MUSIC PLAYER PACKAGE
+
 const { createReadStream } = require('fs');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer, VoiceConnectionStatus, AudioPlayerStatus, entersState } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
-const { Client, GatewayIntentBits } = require('discord.js');
+
+// DISCORD PACKAGE
+
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+
+// GAME RELATED IMPORTS
+
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('rpg.db');
+
+
+const { createProfile, getProfile, deleteProfile } = require('./game/character');
+const { getInventory } = require('./game/inventory');
+const { attack } = require('./combat');
+
+const character = require('./game/character');
+const combat = require('./game/combat');
+const inventory = require('./game/inventory');
+const story = require('./game/story');
+
+// BOT TOKEN IMPORT
 
 require('dotenv').config();
+
+// CLIENT CREATION
 
 const client = new Client({
     intents: [
@@ -16,13 +41,96 @@ const client = new Client({
     partials: ["MESSAGE", "CHANNEL", "REACTION"], // Enable partials
 });
 
+// READY 
+
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
     monitoredMessageId = null
 });
 
+// SAFELY CLOSE DATABSE
+
+process.on('SIGINT', () => {
+    db.close();
+    process.exit();
+});
+
+
+// ON USER MESSAGE FUNCTIONS
 
 client.on('messageCreate', async message => {
+
+    // RPG COMMANDS
+
+    // ATTACK COMMANDS 
+
+    if (message.content === '!attack') { // CURRENTLY ATTACK LOGIC IS 50/50 WIN
+        attack(message.author.id, (profile, resultMessage) => {
+            if (profile) {
+                message.reply(`${resultMessage}\nYour new stats: Health: ${profile.health}, Experience: ${profile.experience}, Gold: ${profile.gold}`);
+            } else {
+                message.reply(resultMessage);
+            }
+        });
+    }
+
+    // INVENTORY COMMANDS
+
+    if (message.content === '!inventory') {
+        getInventory(message.author.id, (inventory) => {
+            if (inventory) {
+                const inventoryList = inventory.map(item => `${item.item_name}: ${item.quantity}`).join('\n');
+                message.reply(`Your inventory:\n${inventoryList}`);
+            } else {
+                message.reply('Your inventory is empty.');
+            }
+        });
+    }
+
+    // PROFILE COMMANDS
+
+    if (message.content === '!deleteprofile') {
+        deleteProfile(message.author.id, (success) => {
+            if (success) {
+                message.reply('Your profile has been successfully deleted.');
+            } else {
+                message.reply('There was an error deleting your profile.');
+            }
+        });
+    }
+
+    if (message.content === '!createprofile') {
+        if (createProfile(message.author.id, message.author.username)) {
+            message.reply('Profile created!');
+        } else {
+            message.reply('You have already created a profile.');
+        }
+    }
+
+    if (message.content === '!profile') {
+        getProfile(message.author.id, (profile) => {
+            if (profile) {
+                const profileEmbed = new EmbedBuilder()
+                    .setColor('#0099ff') // You can choose any color
+                    .setTitle(`${message.author.username}'s Profile`)
+                    .addFields(
+                        { name: 'Level', value: profile.level.toString(), inline: true },
+                        { name: 'Experience', value: profile.experience.toString(), inline: true },
+                        { name: 'Health', value: profile.health.toString(), inline: true },
+                        { name: 'Mana', value: profile.mana.toString(), inline: true },
+                        { name: 'Gold', value: profile.gold.toString(), inline: true }
+                    )
+                    .setTimestamp()
+                    .setFooter({ text: 'RPG Bot', iconURL: client.user.displayAvatarURL() });
+
+                message.reply({ embeds: [profileEmbed] });
+            } else {
+                message.reply('Profile not found.');
+            }
+        });
+    }
+
+    // CLEAR RECENT COMMAND
 
     if (message.content === '!clearRecent') {
         if (!message.member.permissions.has('MANAGE_MESSAGES')) {
@@ -46,6 +154,8 @@ client.on('messageCreate', async message => {
             message.reply('There was an error trying to clear messages in this channel.');
         }
     }
+
+    // MUSIC PLAYER
 
     if (message.content.startsWith('!play')) {
         const args = message.content.split(' ');
@@ -109,6 +219,8 @@ client.on('messageCreate', async message => {
     }
 });
 
+// ROSE ASSIGNMENT USING REACIONS
+
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.id === '284442222173093888' && reaction.emoji.name === '🔒') {
         monitoredMessageId = reaction.message.id;
@@ -134,6 +246,8 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
 });
 
+// ROSE ASSIGNMENT USING REACIONS
+
 client.on('messageReactionRemove', async (reaction, user) => {
     if (reaction.message.id === monitoredMessageId && reaction.emoji.name === '🟩') { // Check for the green square emoji
         const member = await reaction.message.guild.members.fetch(user.id);
@@ -152,6 +266,7 @@ client.on('messageReactionRemove', async (reaction, user) => {
     }
 });
 
+// WELCOME NEW USERS
 
 client.on('guildMemberAdd', member => {
     const channel = member.guild.channels.cache.find(ch => ch.name === 'welcome'); // Replace 'welcome' with your channel's name
@@ -159,6 +274,8 @@ client.on('guildMemberAdd', member => {
 
     channel.send(`Welcome to the server, ${member}!`);
 });
+
+// CLIENT LOGIN WITH TOKEN
 
 client.login(process.env.TOKEN);
 
